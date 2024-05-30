@@ -24,7 +24,7 @@ const generateRaw = await importFromScript('generateRaw');
 class ChessGame {
     static gamesLaunched = 0;
 
-    static opponentMovePrompt = "You are a world-renowned chess grandmaster. You are given the representation of a chessboard state using the Forsyth-Edwards Notation (FEN) and ASCII. Select the best possible move from the list in algebraic notation and reply with JUST the move, e.g. 'Nc6'. You are playing as {{color}}.";
+    static opponentMovePrompt = "You are a world-renowned chess grandmaster. You are given the representation of a chessboard state using the Forsyth-Edwards Notation (FEN), ASCII, and PGN. Select the best possible move from the list in algebraic notation and reply with JUST the move, e.g. 'Nc6'. You are playing as {{color}}.";
     static commentPrompt = "{{char}} played a game of chess against {{user}}. {{user}} played as {{color}} and {{char}} played as {{opponent}}, and {{outcome}}! The final state of the board state in FEN notation: {{fen}}. Write a {{random:witty,playful,funny,quirky,zesty}} comment about the game from {{char}}'s perspective.";
 
     constructor(color) {
@@ -36,6 +36,7 @@ class ChessGame {
         this.boardId = `chessboard-${this.gameId}`;
         this.color = color;
         this.game = new Chess();
+        this.pgn = ''; // Initialize PGN tracking
     }
 
     getOpponentIcon() {
@@ -187,27 +188,114 @@ class ChessGame {
         }
     }
 
-    onDrop(source, target) {
-        this.removeGraySquares();
+	onDrop(source, target) {
+		this.removeGraySquares();
 
-        // see if the move is legal
-        try {
-            this.game.move({
-                from: source,
-                to: target,
-                promotion: 'q' // NOTE: always promote to a queen for example simplicity
-            });
+		// see if the move is legal
+		try {
+			this.game.move({
+				from: source,
+				to: target,
+				promotion: 'q' // NOTE: always promote to a queen for example simplicity
+			});
 
-            // Update position on board
-            this.board.position(this.game.fen());
+			// Update position on board
+			this.board.position(this.game.fen());
 
-            this.updateStatus();
-            this.tryMoveOpponent();
-        } catch {
-            // illegal move
-            return 'snapback';
-        }
-    }
+			// Update PGN
+			this.pgn = this.game.pgn();
+
+			this.updateStatus();
+			this.tryMoveOpponent();
+		} catch {
+			// illegal move
+			return 'snapback';
+		}
+	}
+
+	async tryMoveOpponent() {
+		if (!this.isOpponentTurn()) {
+			return;
+		}
+
+		if (this.game.isGameOver()) {
+			return;
+		}
+
+		const fen = this.game.fen();
+		const moves = this.game.moves();
+		const ascii = this.game.ascii();
+		const pgn = this.game.pgn(); // Get the current PGN
+
+		const systemPrompt = ChessGame.opponentMovePrompt
+			.replace('{{color}}', this.getOpponentColor().toUpperCase());
+
+		const maxRetries = 3;
+
+		for (let i = 0; i < maxRetries; i++) {
+			try {
+				const movesString = 'Available moves:' + '\n' + moves.join(', ');
+				const prompt = [fen, ascii, pgn, movesString].join('\n\n'); // Include PGN in the prompt
+				const reply = await generateRaw(prompt, '', false, false, systemPrompt);
+				const move = parseMove(reply);
+
+				if (!move) {
+					throw new Error('Failed to parse move');
+				}
+
+				if (Array.isArray(move)) {
+					this.game.move({ from: move[0], to: move[1] });
+				}
+
+				if (typeof move === 'string') {
+					this.game.move(move);
+				}
+
+				// Update PGN
+				this.pgn = this.game.pgn();
+
+				this.board.position(this.game.fen());
+				this.updateStatus();
+				return;
+			} catch (error) {
+				console.error('Failed to generate a move', error);
+			}
+		}
+
+		// Make a random move if we failed to generate a move
+		console.warn('Chess: Making a random move');
+		const move = moves[Math.floor(Math.random() * moves.length)];
+		this.game.move(move);
+
+		// Update PGN
+		this.pgn = this.game.pgn();
+
+		this.board.position(this.game.fen());
+		this.updateStatus();
+
+		function parseMove(reply) {
+			reply = String(reply).trim();
+			const regularMatch = reply.match(/([a-h][1-8]-[a-h][1-8])/g);
+
+			if (regularMatch) {
+				return regularMatch[0].split('-');
+			}
+
+			const notationMatch = reply.match(/([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(=[NBRQK])?(\+|#)?$|^O-O(-O)?/);
+
+			if (notationMatch) {
+				return notationMatch[0];
+			}
+
+			for (const move of moves) {
+				if (reply.toLowerCase().includes(move.toLowerCase())) {
+					return move;
+				}
+			}
+
+			return null;
+		}
+	}
 
     onMouseoverSquare(square, piece) {
         if (this.game.isGameOver()) {
