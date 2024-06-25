@@ -87,43 +87,36 @@ class ChessGame {
         }
     }
 
-    async tryMoveOpponent() {
-        if (!this.isOpponentTurn()) {
-            return;
-        }
-
-        if (this.game.isGameOver()) {
-            return;
-        }
+	async tryMoveOpponent() {
+		if (!this.isOpponentTurn() || this.game.isGameOver()) {
+			return;
+		}
 
 		const fen = this.game.fen();
 		const moves = this.game.moves();
 		const ascii = this.game.ascii();
 		const pgn = this.game.pgn();
 		
-		const systemPrompt = ChessGame.opponentMovePrompt
+		const systemPrompt = "System:\n" + ChessGame.opponentMovePrompt
 			.replace('{{color}}', this.getOpponentColor().toUpperCase());
 
-		const gameHistoryPrompt = this.gameHistory.map((fen, index) => 
-			`Move ${index + 1}: ${fen}`
-		).join('\n');
+		const gameHistory = this.gameHistory.map((historyItem, index) => {
+			return `User:\n$${historyItem.fen}\n\n$${historyItem.ascii}\n\n$${historyItem.pgn}\n\nAvailable moves:\n$${historyItem.moves.join(', ')}\n\nAssistant:\n$${historyItem.move}\n`;
+		}).join('\n');
+
+		const currentState = `User:\n$${fen}\n\n$${ascii}\n\n$${pgn}\n\nAvailable moves:\n${moves.join(', ')}`;
 
 		const maxRetries = 3;
 
 		for (let i = 0; i < maxRetries; i++) {
 			try {
-				const movesString = 'Available moves:' + '\n' + moves.join(', ');
 				const prompt = [
-					"Game History:",
-					gameHistoryPrompt,
-					"Current Board:",
-					fen,
-					ascii,
-					pgn,
-					movesString
+					systemPrompt,
+					gameHistory,
+					currentState
 				].join('\n\n');
 				
-				const reply = await generateRaw(prompt, '', false, false, systemPrompt);
+				const reply = await generateRaw(prompt, '', false, false, '');
 				const move = this.parseMove(reply);
 
 				if (!move) {
@@ -135,7 +128,14 @@ class ChessGame {
 					throw new Error('Invalid move');
 				}
 
-				this.gameHistory.push(this.game.fen());
+				this.gameHistory.push({
+					fen: this.game.fen(),
+					ascii: this.game.ascii(),
+					pgn: this.game.pgn(),
+					moves: this.game.moves(),
+					move: move
+				});
+
 				this.board.position(this.game.fen());
 				this.updateStatus();
 				return;
@@ -146,7 +146,13 @@ class ChessGame {
 					console.warn('Chess: Making a random move');
 					const randomMove = moves[Math.floor(Math.random() * moves.length)];
 					this.game.move(randomMove);
-					this.gameHistory.push(this.game.fen());
+					this.gameHistory.push({
+						fen: this.game.fen(),
+						ascii: this.game.ascii(),
+						pgn: this.game.pgn(),
+						moves: this.game.moves(),
+						move: randomMove
+					});
 					this.board.position(this.game.fen());
 					this.updateStatus();
 				}
@@ -214,7 +220,13 @@ class ChessGame {
 			});
 
 			if (move) {
-				this.gameHistory.push(this.game.fen());
+				this.gameHistory.push({
+					fen: this.game.fen(),
+					ascii: this.game.ascii(),
+					pgn: this.game.pgn(),
+					moves: this.game.moves(),
+					move: move.san
+				});
 				// Update position on board
 				this.board.position(this.game.fen());
 				this.updateStatus();
