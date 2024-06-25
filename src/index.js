@@ -161,17 +161,7 @@ class ChessGame {
 				}
 				console.log("Move result:", result);
 
-				this.gameHistory.push({
-					fen: this.game.fen(),
-					pgn: this.game.pgn(),
-					moves: this.game.moves(),
-					move: move
-				});
-
-				if (this.lastPlayerMove) {
-					this.gameHistory[this.gameHistory.length - 2].move = this.lastPlayerMove;
-					this.lastPlayerMove = null;
-				}
+				this.gameHistory[this.gameHistory.length - 1].move = move;
 
 				this.board.position(this.game.fen());
 				this.updateStatus();
@@ -182,12 +172,7 @@ class ChessGame {
 					console.warn('Chess: Making a random move');
 					const randomMove = moves[Math.floor(Math.random() * moves.length)];
 					this.game.move(randomMove);
-					this.gameHistory.push({
-						fen: this.game.fen(),
-						pgn: this.game.pgn(),
-						moves: this.game.moves(),
-						move: randomMove
-					});
+					this.gameHistory[this.gameHistory.length - 1].move = randomMove;
 					this.board.position(this.game.fen());
 					this.updateStatus();
 				}
