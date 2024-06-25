@@ -146,10 +146,10 @@ class ChessGame {
 					gameHistory,
 					currentState
 				].join('\n\n');
-
+				
 				const reply = await generateRaw(prompt, '', false, false, '');
 				console.log("AI's full response:", reply);
-				const move = this.parseMove(reply);
+				const move = parseMove(reply);
 
 				if (!move) {
 					throw new Error('Failed to parse move');
@@ -195,8 +195,7 @@ class ChessGame {
 			}
 		}
 
-        function parseMove(reply) {
-			console.log("AI's raw reply:", reply);
+		function parseMove(reply) {
 			reply = String(reply).trim();
 			const regularMatch = reply.match(/([a-h][1-8]-[a-h][1-8])/g);
 
@@ -212,7 +211,6 @@ class ChessGame {
 				return notationMatch[0];
 			}
 
-			const moves = this.game.moves();
 			for (const move of moves) {
 				if (reply.toLowerCase().includes(move.toLowerCase())) {
 					console.log("Parsed move (included):", move);
@@ -223,7 +221,7 @@ class ChessGame {
 			console.log("Failed to parse move");
 			return null;
 		}
-    }
+	}
 
     removeGraySquares() {
         document.querySelectorAll(`#${this.boardId} .square-55d63`).forEach((element) => {
@@ -263,7 +261,12 @@ class ChessGame {
 
 			if (move) {
 				console.log("Player move result:", move);
-				this.lastPlayerMove = move.san;
+				this.gameHistory.push({
+					fen: this.game.fen(),
+					pgn: this.game.pgn(),
+					moves: this.game.moves(),
+					move: null  // This will be filled by the AI's response
+				});
 				// Update position on board
 				this.board.position(this.game.fen());
 				this.updateStatus();
