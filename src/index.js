@@ -105,7 +105,7 @@ class ChessGame {
 			.replace('{{color}}', this.getOpponentColor().toUpperCase());
 
 		const gameHistoryPrompt = this.gameHistory.map((fen, index) => 
-			`Move $${index + 1}: $${fen}`
+			`Move ${index + 1}: ${fen}`
 		).join('\n');
 
 		const maxRetries = 3;
@@ -124,36 +124,34 @@ class ChessGame {
 				].join('\n\n');
 				
 				const reply = await generateRaw(prompt, '', false, false, systemPrompt);
-                const move = parseMove(reply);
+				const move = this.parseMove(reply);
 
-                if (!move) {
-                    throw new Error('Failed to parse move');
-                }
-
-				if (Array.isArray(move)) {
-					this.game.move({ from: move[0], to: move[1] });
-					this.gameHistory.push(this.game.fen());
+				if (!move) {
+					throw new Error('Failed to parse move');
 				}
 
-				if (typeof move === 'string') {
-					this.game.move(move);
-					this.gameHistory.push(this.game.fen());
+				const result = this.game.move(move);
+				if (!result) {
+					throw new Error('Invalid move');
 				}
 
-                this.board.position(this.game.fen());
-                this.updateStatus();
-                return;
-            } catch (error) {
-                console.error('Failed to generate a move', error);
-            }
-        }
-
-        // Make a random move if we failed to generate a move
-        console.warn('Chess: Making a random move');
-        const move = moves[Math.floor(Math.random() * moves.length)];
-        this.game.move(move);
-        this.board.position(this.game.fen());
-        this.updateStatus();
+				this.gameHistory.push(this.game.fen());
+				this.board.position(this.game.fen());
+				this.updateStatus();
+				return;
+			} catch (error) {
+				console.error('Failed to generate a move', error);
+				if (i === maxRetries - 1) {
+					// Make a random move if we failed to generate a move after all retries
+					console.warn('Chess: Making a random move');
+					const randomMove = moves[Math.floor(Math.random() * moves.length)];
+					this.game.move(randomMove);
+					this.gameHistory.push(this.game.fen());
+					this.board.position(this.game.fen());
+					this.updateStatus();
+				}
+			}
+		}
 
         function parseMove(reply) {
             reply = String(reply).trim();
@@ -204,31 +202,31 @@ class ChessGame {
         }
     }
 
-    onDrop(source, target) {
-        this.removeGraySquares();
+	onDrop(source, target) {
+		this.removeGraySquares();
 
-        // see if the move is legal
-        try {
-            this.game.move({
-                from: source,
-                to: target,
-                promotion: 'q' // NOTE: always promote to a queen for example simplicity
-            });
+		// see if the move is legal
+		try {
+			const move = this.game.move({
+				from: source,
+				to: target,
+				promotion: 'q' // NOTE: always promote to a queen for example simplicity
+			});
 
-            // Update position on board
-            this.board.position(this.game.fen());
-
-			if (this.game.move({from: source, to: target, promotion: 'q'})) {
+			if (move) {
 				this.gameHistory.push(this.game.fen());
+				// Update position on board
+				this.board.position(this.game.fen());
+				this.updateStatus();
+				this.tryMoveOpponent();
+			} else {
+				return 'snapback';
 			}
-
-            this.updateStatus();
-            this.tryMoveOpponent();
-        } catch {
-            // illegal move
-            return 'snapback';
-        }
-    }
+		} catch (error) {
+			console.error('Error making move:', error);
+			return 'snapback';
+		}
+	}
 
     onMouseoverSquare(square, piece) {
         if (this.game.isGameOver()) {
