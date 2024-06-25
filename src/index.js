@@ -161,6 +161,7 @@ class ChessGame {
 				}
 				console.log("Move result:", result);
 
+				// Update the last entry in gameHistory with the assistant's move
 				this.gameHistory[this.gameHistory.length - 1].move = move;
 
 				this.board.position(this.game.fen());
@@ -172,6 +173,7 @@ class ChessGame {
 					console.warn('Chess: Making a random move');
 					const randomMove = moves[Math.floor(Math.random() * moves.length)];
 					this.game.move(randomMove);
+					// Update the last entry in gameHistory with the random move
 					this.gameHistory[this.gameHistory.length - 1].move = randomMove;
 					this.board.position(this.game.fen());
 					this.updateStatus();
