@@ -24,7 +24,7 @@ const generateRaw = await importFromScript('generateRaw');
 class ChessGame {
     static gamesLaunched = 0;
 
-    static opponentMovePrompt = "You are a world-renowned chess grandmaster. You are given the representation of a chessboard state using the Forsyth-Edwards Notation (FEN), (PGN) and ASCII, along with the full game history. Consider the entire game progression when selecting your move. Select the best possible move from the list in algebraic notation and reply with JUST the move, e.g. 'Nc6'. You are playing as {{color}}.";
+    static opponentMovePrompt = "You are a world-renowned chess grandmaster. You are given the representation of a chessboard state using the Forsyth-Edwards Notation (FEN) and Portable Game Notation (PGN), along with the full game history. Consider the entire game progression when selecting your move. Select the best possible move from the list in algebraic notation and reply with JUST the move, e.g. 'Nc6'. You are playing as {{color}}.";
     static commentPrompt = "{{char}} played a game of chess against {{user}}. {{user}} played as {{color}} and {{char}} played as {{opponent}}, and {{outcome}}! The final state of the board state in FEN notation: {{fen}}. Write a {{random:witty,playful,funny,quirky,zesty}} comment about the game from {{char}}'s perspective.";
 
     constructor(color) {
@@ -37,6 +37,7 @@ class ChessGame {
         this.color = color;
         this.game = new Chess();
 		this.gameHistory = [];
+		this.lastPlayerMove = null;
 	}
 
     getOpponentIcon() {
@@ -94,17 +95,47 @@ class ChessGame {
 
 		const fen = this.game.fen();
 		const moves = this.game.moves();
-		const ascii = this.game.ascii();
 		const pgn = this.game.pgn();
 		
 		const systemPrompt = "System:\n" + ChessGame.opponentMovePrompt
 			.replace('{{color}}', this.getOpponentColor().toUpperCase());
 
 		const gameHistory = this.gameHistory.map((historyItem, index) => {
-			return `User:\n$${historyItem.fen}\n\n$${historyItem.ascii}\n\n$${historyItem.pgn}\n\nAvailable moves:\n$${historyItem.moves.join(', ')}\n\nAssistant:\n$${historyItem.move}\n`;
-		}).join('\n');
+			return `User:
+	FEN notation:
+	\`\`\`
+	${historyItem.fen}
+	\`\`\`
 
-		const currentState = `User:\n$${fen}\n\n$${ascii}\n\n$${pgn}\n\nAvailable moves:\n${moves.join(', ')}`;
+	PGN notation:
+	\`\`\`
+	${historyItem.pgn}
+	\`\`\`
+
+	Available moves:
+	\`\`\`
+	${historyItem.moves.join(', ')}
+	\`\`\`
+
+	A:
+	${historyItem.move}`;
+		}).join('\n\n');
+
+		const currentState = `User:
+	FEN notation:
+	\`\`\`
+	${fen}
+	\`\`\`
+
+	PGN notation:
+	\`\`\`
+	${pgn}
+	\`\`\`
+
+	Available moves:
+	\`\`\`
+	${moves.join(', ')}
+	\`\`\``;
 
 		const maxRetries = 3;
 
@@ -130,11 +161,15 @@ class ChessGame {
 
 				this.gameHistory.push({
 					fen: this.game.fen(),
-					ascii: this.game.ascii(),
 					pgn: this.game.pgn(),
 					moves: this.game.moves(),
 					move: move
 				});
+
+				if (this.lastPlayerMove) {
+					this.gameHistory[this.gameHistory.length - 2].move = this.lastPlayerMove;
+					this.lastPlayerMove = null;
+				}
 
 				this.board.position(this.game.fen());
 				this.updateStatus();
@@ -142,13 +177,11 @@ class ChessGame {
 			} catch (error) {
 				console.error('Failed to generate a move', error);
 				if (i === maxRetries - 1) {
-					// Make a random move if we failed to generate a move after all retries
 					console.warn('Chess: Making a random move');
 					const randomMove = moves[Math.floor(Math.random() * moves.length)];
 					this.game.move(randomMove);
 					this.gameHistory.push({
 						fen: this.game.fen(),
-						ascii: this.game.ascii(),
 						pgn: this.game.pgn(),
 						moves: this.game.moves(),
 						move: randomMove
@@ -211,22 +244,15 @@ class ChessGame {
 	onDrop(source, target) {
 		this.removeGraySquares();
 
-		// see if the move is legal
 		try {
 			const move = this.game.move({
 				from: source,
 				to: target,
-				promotion: 'q' // NOTE: always promote to a queen for example simplicity
+				promotion: 'q'
 			});
 
 			if (move) {
-				this.gameHistory.push({
-					fen: this.game.fen(),
-					ascii: this.game.ascii(),
-					pgn: this.game.pgn(),
-					moves: this.game.moves(),
-					move: move.san
-				});
+				this.lastPlayerMove = move.san;
 				// Update position on board
 				this.board.position(this.game.fen());
 				this.updateStatus();
