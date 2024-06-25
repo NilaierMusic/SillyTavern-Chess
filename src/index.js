@@ -412,8 +412,9 @@ class ChessGame {
         container.appendChild(bottomRowContainer);
 
         // Add PGN display
-        const pgnContainer = document.createElement('div');
-        pgnContainer.classList.add('pgn-container');
+        const pgnText = document.createElement('pre');
+        pgnText.classList.add('pgn-text');
+        this.pgnText = pgnText;
 
         // Detach the message from the chat flow
         const order = (20000 + ChessGame.gamesLaunched).toFixed(0);
