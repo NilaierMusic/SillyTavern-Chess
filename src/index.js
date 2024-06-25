@@ -24,7 +24,7 @@ const generateRaw = await importFromScript('generateRaw');
 class ChessGame {
     static gamesLaunched = 0;
 
-    static opponentMovePrompt = "You are a world-renowned chess grandmaster. You are given the representation of a chessboard state using the Forsyth-Edwards Notation (FEN) and Portable Game Notation (PGN). Select the best possible move from the list in algebraic notation and reply with JUST the move, e.g. 'Nc6'. You are playing as {{color}}.";
+    static opponentMovePrompt = "You are a world-renowned chess grandmaster. You are given the representation of a chessboard state using the Forsyth-Edwards Notation (FEN) and Portable Game Notation (PGN), along with the full game history. Select the best possible move from the list in algebraic notation and reply with JUST the move, e.g. 'Nc6'. You are playing as {{color}}.";
     static commentPrompt = "{{char}} played a game of chess against {{user}}. {{user}} played as {{color}} and {{char}} played as {{opponent}}, and {{outcome}}! The final state of the board state in FEN notation: {{fen}}. Write a {{random:witty,playful,funny,quirky,zesty}} comment about the game from {{char}}'s perspective.";
 
     constructor(color) {
@@ -32,11 +32,12 @@ class ChessGame {
             color = Math.random() > 0.5 ? 'white' : 'black';
         }
 
-        this.gameId = `sillytavern-chess-${Math.random().toString(36).substring(2)}`;
-        this.boardId = `chessboard-${this.gameId}`;
+        this.gameId = `sillytavern-chess-$${Math.random().toString(36).substring(2)}`;
+        this.boardId = `chessboard-$${this.gameId}`;
         this.color = color;
         this.game = new Chess();
-        this.pgn = ''; // Initialize PGN tracking
+        this.pgn = '';
+        this.gameHistory = [];
     }
 
     getOpponentIcon() {
@@ -67,11 +68,11 @@ class ChessGame {
 
     async endGame() {
         const context = SillyTavern.getContext();
-        const injectId = `chess-${Math.random().toString(36).substring(2)}`;
+        const injectId = `chess-$${Math.random().toString(36).substring(2)}`;
 
         try {
             const message = context.chat[this.messageIndex];
-            message.mes = `[${context.name1} (${this.color}) played a game of chess against ${context.name2} (${this.getOpponentColor()}). Outcome: ${this.getOutcome()}]`;
+            message.mes = `[$${context.name1} ($${this.color}) played a game of chess against $${context.name2} ($${this.getOpponentColor()}). Outcome: $${this.getOutcome()}]`;
             this.messageText.textContent = message.mes;
             this.chatMessage.style.order = '';
             const commentPromptText = ChessGame.commentPrompt
@@ -79,11 +80,14 @@ class ChessGame {
                 .replace(/{{opponent}}/gi, this.getOpponentColor())
                 .replace(/{{outcome}}/gi, this.getOutcome())
                 .replace(/{{fen}}/gi, this.game.fen());
-            const command = `/inject id="${injectId}" position="chat" depth="0" scan="true" role="system" ephemeral="true" ${commentPromptText} | /trigger await=true`;
+            const command = `/inject id="$${injectId}" position="chat" depth="0" scan="true" role="system" ephemeral="true" $${commentPromptText} | /trigger await=true`;
             await context.executeSlashCommands(command);
         } finally {
             // Clear the inject
-            await context.executeSlashCommands(`/inject id="${injectId}"`);
+            await context.executeSlashCommands(`/inject id="$${injectId}"`);
+            
+            // Clear the game history
+            this.gameHistory = [];
         }
     }
 
@@ -98,7 +102,8 @@ class ChessGame {
 
         const fen = this.game.fen();
         const moves = this.game.moves();
-        const pgn = this.game.pgn(); // Get the current PGN
+        const pgn = this.game.pgn();
+        const gameHistory = this.formatGameHistory();
 
         const systemPrompt = ChessGame.opponentMovePrompt
             .replace('{{color}}', this.getOpponentColor().toUpperCase());
@@ -108,7 +113,7 @@ class ChessGame {
         for (let i = 0; i < maxRetries; i++) {
             try {
                 const movesString = 'Available moves:' + '\n' + moves.join(', ');
-                const prompt = [fen, pgn, movesString].join('\n\n'); // Include PGN in the prompt
+                const prompt = [fen, pgn, gameHistory, movesString].join('\n\n');
                 const reply = await generateRaw(prompt, '', false, false, systemPrompt);
                 const move = parseMove(reply);
 
@@ -116,17 +121,17 @@ class ChessGame {
                     throw new Error('Failed to parse move');
                 }
 
+                let parsedMove;
                 if (Array.isArray(move)) {
-                    this.game.move({ from: move[0], to: move[1] });
+                    parsedMove = { from: move[0], to: move[1] };
+                } else if (typeof move === 'string') {
+                    parsedMove = move;
                 }
 
-                if (typeof move === 'string') {
-                    this.game.move(move);
-                }
+                const madeMove = this.game.move(parsedMove);
+                this.addMoveToHistory(madeMove);
 
-                // Update PGN
                 this.pgn = this.game.pgn();
-
                 this.board.position(this.game.fen());
                 this.updateStatus();
                 return;
@@ -138,11 +143,10 @@ class ChessGame {
         // Make a random move if we failed to generate a move
         console.warn('Chess: Making a random move');
         const move = moves[Math.floor(Math.random() * moves.length)];
-        this.game.move(move);
+        const madeMove = this.game.move(move);
+        this.addMoveToHistory(madeMove);
 
-        // Update PGN
         this.pgn = this.game.pgn();
-
         this.board.position(this.game.fen());
         this.updateStatus();
 
@@ -200,11 +204,13 @@ class ChessGame {
 
         // see if the move is legal
         try {
-            this.game.move({
+            const move = this.game.move({
                 from: source,
                 to: target,
                 promotion: 'q' // NOTE: always promote to a queen for example simplicity
             });
+
+            this.addMoveToHistory(move);
 
             // Update position on board
             this.board.position(this.game.fen());
@@ -218,6 +224,23 @@ class ChessGame {
             // illegal move
             return 'snapback';
         }
+    }
+
+    addMoveToHistory(move) {
+        this.gameHistory.push({
+            color: move.color,
+            from: move.from,
+            to: move.to,
+            piece: move.piece,
+            san: move.san,
+            fen: this.game.fen()
+        });
+    }
+	
+    formatGameHistory() {
+        return this.gameHistory.map((move, index) => 
+            `$${index + 1}. $${move.color === 'w' ? 'White' : 'Black'}: $${move.san}`
+        ).join('\n');
     }
 
     onMouseoverSquare(square, piece) {
