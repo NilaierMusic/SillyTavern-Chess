@@ -102,40 +102,40 @@ class ChessGame {
 
 		const gameHistory = this.gameHistory.map((historyItem, index) => {
 			return `User:
-	FEN notation:
-	\`\`\`
-	${historyItem.fen}
-	\`\`\`
+		FEN notation:
+		\`\`\`
+		${historyItem.fen}
+		\`\`\`
 
-	PGN notation:
-	\`\`\`
-	${historyItem.pgn}
-	\`\`\`
+		PGN notation:
+		\`\`\`
+		${historyItem.pgn}
+		\`\`\`
 
-	Available moves:
-	\`\`\`
-	${historyItem.moves.join(', ')}
-	\`\`\`
+		Available moves:
+		\`\`\`
+		${historyItem.moves.join(', ')}
+		\`\`\`
 
-	A:
-	${historyItem.move}`;
-		}).join('\n\n');
+		Assistant:
+		${historyItem.move}`;
+			}).join('\n\n');
 
-		const currentState = `User:
-	FEN notation:
-	\`\`\`
-	${fen}
-	\`\`\`
+			const currentState = `User:
+		FEN notation:
+		\`\`\`
+		${fen}
+		\`\`\`
 
-	PGN notation:
-	\`\`\`
-	${pgn}
-	\`\`\`
+		PGN notation:
+		\`\`\`
+		${pgn}
+		\`\`\`
 
-	Available moves:
-	\`\`\`
-	${moves.join(', ')}
-	\`\`\``;
+		Available moves:
+		\`\`\`
+		${moves.join(', ')}
+		\`\`\``;
 
 		const maxRetries = 3;
 
@@ -146,18 +146,21 @@ class ChessGame {
 					gameHistory,
 					currentState
 				].join('\n\n');
-				
+
 				const reply = await generateRaw(prompt, '', false, false, '');
+				console.log("AI's full response:", reply);
 				const move = this.parseMove(reply);
 
 				if (!move) {
 					throw new Error('Failed to parse move');
 				}
 
+				console.log("Attempting to make move:", move);
 				const result = this.game.move(move);
 				if (!result) {
 					throw new Error('Invalid move');
 				}
+				console.log("Move result:", result);
 
 				this.gameHistory.push({
 					fen: this.game.fen(),
@@ -193,27 +196,33 @@ class ChessGame {
 		}
 
         function parseMove(reply) {
-            reply = String(reply).trim();
-            const regularMatch = reply.match(/([a-h][1-8]-[a-h][1-8])/g);
+			console.log("AI's raw reply:", reply);
+			reply = String(reply).trim();
+			const regularMatch = reply.match(/([a-h][1-8]-[a-h][1-8])/g);
 
-            if (regularMatch) {
-                return regularMatch[0].split('-');
-            }
+			if (regularMatch) {
+				console.log("Parsed move (regular):", regularMatch[0]);
+				return regularMatch[0].split('-');
+			}
 
-            const notationMatch = reply.match(/([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(=[NBRQK])?(\+|#)?$|^O-O(-O)?/);
+			const notationMatch = reply.match(/([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(=[NBRQK])?(\+|#)?$|^O-O(-O)?/);
 
-            if (notationMatch) {
-                return notationMatch[0];
-            }
+			if (notationMatch) {
+				console.log("Parsed move (notation):", notationMatch[0]);
+				return notationMatch[0];
+			}
 
-            for (const move of moves) {
-                if (reply.toLowerCase().includes(move.toLowerCase())) {
-                    return move;
-                }
-            }
+			const moves = this.game.moves();
+			for (const move of moves) {
+				if (reply.toLowerCase().includes(move.toLowerCase())) {
+					console.log("Parsed move (included):", move);
+					return move;
+				}
+			}
 
-            return null;
-        }
+			console.log("Failed to parse move");
+			return null;
+		}
     }
 
     removeGraySquares() {
@@ -245,6 +254,7 @@ class ChessGame {
 		this.removeGraySquares();
 
 		try {
+			console.log("Player attempting move:", source, "to", target);
 			const move = this.game.move({
 				from: source,
 				to: target,
@@ -252,12 +262,14 @@ class ChessGame {
 			});
 
 			if (move) {
+				console.log("Player move result:", move);
 				this.lastPlayerMove = move.san;
 				// Update position on board
 				this.board.position(this.game.fen());
 				this.updateStatus();
 				this.tryMoveOpponent();
 			} else {
+				console.log("Invalid player move");
 				return 'snapback';
 			}
 		} catch (error) {
