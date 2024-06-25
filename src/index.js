@@ -24,7 +24,7 @@ const generateRaw = await importFromScript('generateRaw');
 class ChessGame {
     static gamesLaunched = 0;
 
-    static opponentMovePrompt = "You are a world-renowned chess grandmaster. You are given the representation of a chessboard state using the Forsyth-Edwards Notation (FEN) and ASCII. Select the best possible move from the list in algebraic notation and reply with JUST the move, e.g. 'Nc6'. You are playing as {{color}}.";
+    static opponentMovePrompt = "You are a world-renowned chess grandmaster. You are given the representation of a chessboard state using the Forsyth-Edwards Notation (FEN), (PGN) and ASCII, along with the full game history. Consider the entire game progression when selecting your move. Select the best possible move from the list in algebraic notation and reply with JUST the move, e.g. 'Nc6'. You are playing as {{color}}.";
     static commentPrompt = "{{char}} played a game of chess against {{user}}. {{user}} played as {{color}} and {{char}} played as {{opponent}}, and {{outcome}}! The final state of the board state in FEN notation: {{fen}}. Write a {{random:witty,playful,funny,quirky,zesty}} comment about the game from {{char}}'s perspective.";
 
     constructor(color) {
@@ -36,7 +36,8 @@ class ChessGame {
         this.boardId = `chessboard-${this.gameId}`;
         this.color = color;
         this.game = new Chess();
-    }
+		this.gameHistory = [];
+	}
 
     getOpponentIcon() {
         return 'fa-chess-queen';
@@ -95,34 +96,49 @@ class ChessGame {
             return;
         }
 
-        const fen = this.game.fen();
-        const moves = this.game.moves();
-        const ascii = this.game.ascii();
-        const pgn = this.game.pgn(); // Generate PGN notation
+		const fen = this.game.fen();
+		const moves = this.game.moves();
+		const ascii = this.game.ascii();
+		const pgn = this.game.pgn();
+		
+		const systemPrompt = ChessGame.opponentMovePrompt
+			.replace('{{color}}', this.getOpponentColor().toUpperCase());
 
-        const systemPrompt = ChessGame.opponentMovePrompt
-            .replace('{{color}}', this.getOpponentColor().toUpperCase());
+		const gameHistoryPrompt = this.gameHistory.map((fen, index) => 
+			`Move $${index + 1}: $${fen}`
+		).join('\n');
 
-        const maxRetries = 3;
+		const maxRetries = 3;
 
-        for (let i = 0; i < maxRetries; i++) {
-            try {
-                const movesString = 'Available moves:' + '\n' + moves.join(', ');
-                const prompt = [fen, ascii, pgn, movesString].join('\n\n'); // Include PGN in the prompt
-                const reply = await generateRaw(prompt, '', false, false, systemPrompt);
+		for (let i = 0; i < maxRetries; i++) {
+			try {
+				const movesString = 'Available moves:' + '\n' + moves.join(', ');
+				const prompt = [
+					"Game History:",
+					gameHistoryPrompt,
+					"Current Board:",
+					fen,
+					ascii,
+					pgn,
+					movesString
+				].join('\n\n');
+				
+				const reply = await generateRaw(prompt, '', false, false, systemPrompt);
                 const move = parseMove(reply);
 
                 if (!move) {
                     throw new Error('Failed to parse move');
                 }
 
-                if (Array.isArray(move)) {
-                    this.game.move({ from: move[0], to: move[1] });
-                }
+				if (Array.isArray(move)) {
+					this.game.move({ from: move[0], to: move[1] });
+					this.gameHistory.push(this.game.fen());
+				}
 
-                if (typeof move === 'string') {
-                    this.game.move(move);
-                }
+				if (typeof move === 'string') {
+					this.game.move(move);
+					this.gameHistory.push(this.game.fen());
+				}
 
                 this.board.position(this.game.fen());
                 this.updateStatus();
@@ -201,6 +217,10 @@ class ChessGame {
 
             // Update position on board
             this.board.position(this.game.fen());
+
+			if (this.game.move({from: source, to: target, promotion: 'q'})) {
+				this.gameHistory.push(this.game.fen());
+			}
 
             this.updateStatus();
             this.tryMoveOpponent();
