@@ -91,87 +91,83 @@ class ChessGame {
         }
     }
 
-    async tryMoveOpponent() {
-        if (!this.isOpponentTurn()) {
-            return;
-        }
+	async tryMoveOpponent() {
+		if (!this.isOpponentTurn() || this.game.isGameOver()) {
+			return;
+		}
 
-        if (this.game.isGameOver()) {
-            return;
-        }
+		const currentFen = this.game.fen();
+		const currentPgn = this.game.pgn();
+		const availableMoves = this.game.moves();
+		const gameHistory = this.formatGameHistory();
 
-        const fen = this.game.fen();
-        const moves = this.game.moves();
-        const pgn = this.game.pgn();
-        const gameHistory = this.formatGameHistory();
+		const systemPrompt = ChessGame.opponentMovePrompt
+			.replace('{{color}}', this.getOpponentColor().toUpperCase());
 
-        const systemPrompt = ChessGame.opponentMovePrompt
-            .replace('{{color}}', this.getOpponentColor().toUpperCase());
+		const maxRetries = 3;
 
-        const maxRetries = 3;
+		for (let i = 0; i < maxRetries; i++) {
+			try {
+				const movesString = 'Available moves:' + '\n' + availableMoves.join(', ');
+				const prompt = [
+					"Game History:",
+					gameHistory,
+					"Current Position:",
+					`FEN: $${currentFen}`,
+					`PGN: $${currentPgn}`,
+					movesString
+				].join('\n\n');
 
-        for (let i = 0; i < maxRetries; i++) {
-            try {
-                const movesString = 'Available moves:' + '\n' + moves.join(', ');
-                const prompt = [fen, pgn, gameHistory, movesString].join('\n\n');
-                const reply = await generateRaw(prompt, '', false, false, systemPrompt);
-                const move = parseMove(reply);
+				const reply = await generateRaw(prompt, '', false, false, systemPrompt);
+				const move = this.parseMove(reply);
 
-                if (!move) {
-                    throw new Error('Failed to parse move');
-                }
+				if (!move) {
+					throw new Error('Failed to parse move');
+				}
 
-                let parsedMove;
-                if (Array.isArray(move)) {
-                    parsedMove = { from: move[0], to: move[1] };
-                } else if (typeof move === 'string') {
-                    parsedMove = move;
-                }
+				const madeMove = this.game.move(move);
+				this.addMoveToHistory(madeMove);
 
-                const madeMove = this.game.move(parsedMove);
-                this.addMoveToHistory(madeMove);
+				this.board.position(this.game.fen());
+				this.updateStatus();
+				return;
+			} catch (error) {
+				console.error('Failed to generate a move', error);
+			}
+		}
 
-                this.pgn = this.game.pgn();
-                this.board.position(this.game.fen());
-                this.updateStatus();
-                return;
-            } catch (error) {
-                console.error('Failed to generate a move', error);
-            }
-        }
+		// Make a random move if we failed to generate a move
+		console.warn('Chess: Making a random move');
+		const randomMove = availableMoves[Math.floor(Math.random() * availableMoves.length)];
+		const madeMove = this.game.move(randomMove);
+		this.addMoveToHistory(madeMove);
 
-        // Make a random move if we failed to generate a move
-        console.warn('Chess: Making a random move');
-        const move = moves[Math.floor(Math.random() * moves.length)];
-        const madeMove = this.game.move(move);
-        this.addMoveToHistory(madeMove);
-
-        this.pgn = this.game.pgn();
-        this.board.position(this.game.fen());
-        this.updateStatus();
+		this.board.position(this.game.fen());
+		this.updateStatus();
 
         function parseMove(reply) {
-            reply = String(reply).trim();
-            const regularMatch = reply.match(/([a-h][1-8]-[a-h][1-8])/g);
+			reply = String(reply).trim();
+			const regularMatch = reply.match(/([a-h][1-8]-[a-h][1-8])/g);
 
-            if (regularMatch) {
-                return regularMatch[0].split('-');
-            }
+			if (regularMatch) {
+				return { from: regularMatch[0].split('-')[0], to: regularMatch[0].split('-')[1] };
+			}
 
-            const notationMatch = reply.match(/([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(=[NBRQK])?(\+|#)?$|^O-O(-O)?/);
+			const notationMatch = reply.match(/([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(=[NBRQK])?(\+|#)?$$|^O-O(-O)?/);
 
-            if (notationMatch) {
-                return notationMatch[0];
-            }
+			if (notationMatch) {
+				return notationMatch[0];
+			}
 
-            for (const move of moves) {
-                if (reply.toLowerCase().includes(move.toLowerCase())) {
-                    return move;
-                }
-            }
+			const availableMoves = this.game.moves();
+			for (const move of availableMoves) {
+				if (reply.toLowerCase().includes(move.toLowerCase())) {
+					return move;
+				}
+			}
 
-            return null;
-        }
+			return null;
+		}
     }
 
     removeGraySquares() {
@@ -226,22 +222,26 @@ class ChessGame {
         }
     }
 
-    addMoveToHistory(move) {
-        this.gameHistory.push({
-            color: move.color,
-            from: move.from,
-            to: move.to,
-            piece: move.piece,
-            san: move.san,
-            fen: this.game.fen()
-        });
-    }
+	addMoveToHistory(move) {
+		this.gameHistory.push({
+			color: move.color,
+			from: move.from,
+			to: move.to,
+			piece: move.piece,
+			san: move.san,
+			fen: this.game.fen(),
+			pgn: this.game.pgn()
+		});
+	}
 	
-    formatGameHistory() {
-        return this.gameHistory.map((move, index) => 
-            `$${index + 1}. $${move.color === 'w' ? 'White' : 'Black'}: $${move.san}`
-        ).join('\n');
-    }
+	formatGameHistory() {
+		return this.gameHistory.map((move, index) => 
+			`Move $${index + 1}:\n` +
+			`FEN: $${move.fen}\n` +
+			`PGN: $${move.pgn}\n` +
+			`$${move.color === 'w' ? 'White' : 'Black'}: $${move.san}`
+		).join('\n\n');
+	}
 
     onMouseoverSquare(square, piece) {
         if (this.game.isGameOver()) {
