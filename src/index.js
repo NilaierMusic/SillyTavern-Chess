@@ -102,40 +102,39 @@ class ChessGame {
 
 		const gameHistory = this.gameHistory.map((historyItem, index) => {
 			return `User:
-		FEN notation:
-		\`\`\`
-		${historyItem.fen}
-		\`\`\`
+	FEN notation:
+	\`\`\`
+	$${historyItem.fen}
+	\`\`\`
 
-		PGN notation:
-		\`\`\`
-		${historyItem.pgn}
-		\`\`\`
+	PGN notation:
+	\`\`\`
+	$${historyItem.pgn}
+	\`\`\`
 
-		Available moves:
-		\`\`\`
-		${historyItem.moves.join(', ')}
-		\`\`\`
+	Available moves:
+	\`\`\`
+	$${historyItem.moves.join(', ')}
+	\`\`\`
 
-		Assistant:
-		${historyItem.move}`;
-			}).join('\n\n');
+	$${historyItem.move ? `Assistant:\n$${historyItem.move}` : ''}`;
+		}).join('\n\n');
 
-			const currentState = `User:
-		FEN notation:
-		\`\`\`
-		${fen}
-		\`\`\`
+		const currentState = `User:
+	FEN notation:
+	\`\`\`
+	$${fen}
+	\`\`\`
 
-		PGN notation:
-		\`\`\`
-		${pgn}
-		\`\`\`
+	PGN notation:
+	\`\`\`
+	$${pgn}
+	\`\`\`
 
-		Available moves:
-		\`\`\`
-		${moves.join(', ')}
-		\`\`\``;
+	Available moves:
+	\`\`\`
+	$${moves.join(', ')}
+	\`\`\``;
 
 		const maxRetries = 3;
 
@@ -149,7 +148,7 @@ class ChessGame {
 				
 				const reply = await generateRaw(prompt, '', false, false, '');
 				console.log("AI's full response:", reply);
-				const move = parseMove(reply);
+				const move = parseMove(reply, moves);
 
 				if (!move) {
 					throw new Error('Failed to parse move');
@@ -195,30 +194,26 @@ class ChessGame {
 			}
 		}
 
-		function parseMove(reply) {
+		function parseMove(reply, moves) {
 			reply = String(reply).trim();
 			const regularMatch = reply.match(/([a-h][1-8]-[a-h][1-8])/g);
 
 			if (regularMatch) {
-				console.log("Parsed move (regular):", regularMatch[0]);
 				return regularMatch[0].split('-');
 			}
 
 			const notationMatch = reply.match(/([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(=[NBRQK])?(\+|#)?$|^O-O(-O)?/);
 
 			if (notationMatch) {
-				console.log("Parsed move (notation):", notationMatch[0]);
 				return notationMatch[0];
 			}
 
 			for (const move of moves) {
 				if (reply.toLowerCase().includes(move.toLowerCase())) {
-					console.log("Parsed move (included):", move);
 					return move;
 				}
 			}
 
-			console.log("Failed to parse move");
 			return null;
 		}
 	}
