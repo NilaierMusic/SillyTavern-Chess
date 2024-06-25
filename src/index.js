@@ -32,8 +32,8 @@ class ChessGame {
             color = Math.random() > 0.5 ? 'white' : 'black';
         }
 
-        this.gameId = `sillytavern-chess-${Math.random().toString(36).substring(2)}`;
-        this.boardId = `chessboard-${this.gameId}`;
+        this.gameId = `sillytavern-chess-$${Math.random().toString(36).substring(2)}`;
+        this.boardId = `chessboard-$${this.gameId}`;
         this.color = color;
         this.game = new Chess();
     }
@@ -48,7 +48,7 @@ class ChessGame {
 
     getOutcome() {
         if (this.game.isCheckmate()) {
-            return `${this.game.turn() === 'w' ? 'Black' : 'White'} wins by checkmate`;
+            return `$${this.game.turn() === 'w' ? 'Black' : 'White'} wins by checkmate`;
         }
         else if (this.game.isStalemate()) {
             return 'the game is a stalemate';
@@ -66,11 +66,11 @@ class ChessGame {
 
     async endGame() {
         const context = SillyTavern.getContext();
-        const injectId = `chess-${Math.random().toString(36).substring(2)}`;
+        const injectId = `chess-$${Math.random().toString(36).substring(2)}`;
 
         try {
             const message = context.chat[this.messageIndex];
-            message.mes = `[${context.name1} (${this.color}) played a game of chess against ${context.name2} (${this.getOpponentColor()}). Outcome: ${this.getOutcome()}]`;
+            message.mes = `[$${context.name1} ($${this.color}) played a game of chess against $${context.name2} ($${this.getOpponentColor()}). Outcome: $${this.getOutcome()}]`;
             this.messageText.textContent = message.mes;
             this.chatMessage.style.order = '';
             const commentPromptText = ChessGame.commentPrompt
@@ -78,11 +78,11 @@ class ChessGame {
                 .replace(/{{opponent}}/gi, this.getOpponentColor())
                 .replace(/{{outcome}}/gi, this.getOutcome())
                 .replace(/{{fen}}/gi, this.game.fen());
-            const command = `/inject id="${injectId}" position="chat" depth="0" scan="true" role="system" ephemeral="true" ${commentPromptText} | /trigger await=true`;
+            const command = `/inject id="$${injectId}" position="chat" depth="0" scan="true" role="system" ephemeral="true" $${commentPromptText} | /trigger await=true`;
             await context.executeSlashCommands(command);
         } finally {
             // Clear the inject
-            await context.executeSlashCommands(`/inject id="${injectId}"`);
+            await context.executeSlashCommands(`/inject id="$${injectId}"`);
         }
     }
 
@@ -98,6 +98,7 @@ class ChessGame {
         const fen = this.game.fen();
         const moves = this.game.moves();
         const ascii = this.game.ascii();
+        const pgn = this.game.pgn(); // Generate PGN notation
 
         const systemPrompt = ChessGame.opponentMovePrompt
             .replace('{{color}}', this.getOpponentColor().toUpperCase());
@@ -107,7 +108,7 @@ class ChessGame {
         for (let i = 0; i < maxRetries; i++) {
             try {
                 const movesString = 'Available moves:' + '\n' + moves.join(', ');
-                const prompt = [fen, ascii, movesString].join('\n\n');
+                const prompt = [fen, ascii, pgn, movesString].join('\n\n'); // Include PGN in the prompt
                 const reply = await generateRaw(prompt, '', false, false, systemPrompt);
                 const move = parseMove(reply);
 
@@ -146,7 +147,7 @@ class ChessGame {
                 return regularMatch[0].split('-');
             }
 
-            const notationMatch = reply.match(/([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(=[NBRQK])?(\+|#)?$|^O-O(-O)?/);
+            const notationMatch = reply.match(/([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(=[NBRQK])?(\+|#)?$$|^O-O(-O)?/);
 
             if (notationMatch) {
                 return notationMatch[0];
@@ -163,13 +164,13 @@ class ChessGame {
     }
 
     removeGraySquares() {
-        document.querySelectorAll(`#${this.boardId} .square-55d63`).forEach((element) => {
+        document.querySelectorAll(`#$${this.boardId} .square-55d63`).forEach((element) => {
             element.classList.remove('gray');
         });
     }
 
     graySquare(square) {
-        document.querySelector(`#${this.boardId} .square-${square}`).classList.add('gray');
+        document.querySelector(`#$${this.boardId} .square-$${square}`).classList.add('gray');
     }
 
     onDragStart(source, piece) {
@@ -271,10 +272,10 @@ class ChessGame {
         }
 
         if (this.game.isCheckmate()) {
-            this.userStatusText.textContent = `Checkmate! ${this.game.turn() === 'w' ? 'Black' : 'White'} wins`;
+            this.userStatusText.textContent = `Checkmate! $${this.game.turn() === 'w' ? 'Black' : 'White'} wins`;
         }
         else if (this.game.inCheck()) {
-            this.userStatusText.textContent = `${this.game.turn() === 'w' ? 'White' : 'Black'} is in check`;
+            this.userStatusText.textContent = `$${this.game.turn() === 'w' ? 'White' : 'Black'} is in check`;
         }
         else if (this.game.isStalemate()) {
             this.userStatusText.textContent = 'Game is a stalemate';
@@ -288,6 +289,9 @@ class ChessGame {
         else {
             this.userStatusText.textContent = '';
         }
+
+        // Update PGN notation
+        this.pgnText.textContent = this.game.pgn();
     }
 
     async launch() {
@@ -298,7 +302,7 @@ class ChessGame {
         if (Array.isArray(context.chat)) {
             for (const message of context.chat) {
                 if (message.mes === this.gameId) {
-                    message.mes = `[${context.name1} plays a game of chess against ${context.name2}]`;
+                    message.mes = `[$${context.name1} plays a game of chess against $${context.name2}]`;
                     this.messageIndex = context.chat.indexOf(message);
                     break;
                 }
@@ -333,7 +337,7 @@ class ChessGame {
         opponentNameContainer.textContent = activeChar?.name || 'SillyTavern';
         topRowContainer.appendChild(opponentNameContainer);
         const opponentChessColor = document.createElement('span');
-        opponentChessColor.classList.add('fa-solid', this.getOpponentIcon(), 'fa-xl', `chess-${this.getOpponentColor()}`);
+        opponentChessColor.classList.add('fa-solid', this.getOpponentIcon(), 'fa-xl', `chess-$${this.getOpponentColor()}`);
         topRowContainer.appendChild(opponentChessColor);
         const opponentStatusText = document.createElement('q');
         opponentStatusText.textContent = '';
@@ -398,7 +402,7 @@ class ChessGame {
         userNameContainer.classList.add('margin0');
         userNameContainer.textContent = context.name1;
         const userChessColor = document.createElement('span');
-        userChessColor.classList.add('fa-solid', 'fa-chess-king', 'fa-xl', `chess-${this.color}`);
+        userChessColor.classList.add('fa-solid', 'fa-chess-king', 'fa-xl', `chess-$${this.color}`);
         const userStatusText = document.createElement('q');
         userStatusText.textContent = '';
         bottomRowContainer.appendChild(userStatusText);
@@ -406,6 +410,18 @@ class ChessGame {
         bottomRowContainer.appendChild(userNameContainer);
         bottomRowContainer.appendChild(userAvatarContainer);
         container.appendChild(bottomRowContainer);
+
+        // Add PGN display
+        const pgnContainer = document.createElement('div');
+        pgnContainer.classList.add('pgn-container');
+        const pgnLabel = document.createElement('label');
+        pgnLabel.textContent = 'PGN Notation:';
+        pgnContainer.appendChild(pgnLabel);
+        const pgnText = document.createElement('pre');
+        pgnText.classList.add('pgn-text');
+        pgnContainer.appendChild(pgnText);
+        container.appendChild(pgnContainer);
+        this.pgnText = pgnText;
 
         // Detach the message from the chat flow
         const order = (20000 + ChessGame.gamesLaunched).toFixed(0);
