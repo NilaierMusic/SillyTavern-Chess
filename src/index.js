@@ -104,36 +104,36 @@ class ChessGame {
 			return `User:
 	FEN notation:
 	\`\`\`
-	$${historyItem.fen}
+	${historyItem.fen}
 	\`\`\`
 
 	PGN notation:
 	\`\`\`
-	$${historyItem.pgn}
+	${historyItem.pgn}
 	\`\`\`
 
 	Available moves:
 	\`\`\`
-	$${historyItem.moves.join(', ')}
+	${historyItem.moves.join(', ')}
 	\`\`\`
 
-	$${historyItem.move ? `Assistant:\n$${historyItem.move}` : ''}`;
+	${historyItem.move ? `Assistant:\n$${historyItem.move}` : ''}`;
 		}).join('\n\n');
 
 		const currentState = `User:
 	FEN notation:
 	\`\`\`
-	$${fen}
+	${fen}
 	\`\`\`
 
 	PGN notation:
 	\`\`\`
-	$${pgn}
+	${pgn}
 	\`\`\`
 
 	Available moves:
 	\`\`\`
-	$${moves.join(', ')}
+	${moves.join(', ')}
 	\`\`\``;
 
 		const maxRetries = 3;
