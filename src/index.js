@@ -109,7 +109,7 @@ class ChessGame {
 		} else {
 			const gameHistory = this.gameHistory.map(this.getHistoryItemPrompt).join('\n\n');
 			const currentState = this.getCurrentStatePrompt(fen, pgn, moves);
-			prompt = `${systemPrompt}\n\n${gameHistory}\n\n${currentState}`;
+			prompt = `${systemPrompt}\n\n${gameHistory}\n\nUser:${currentState}`;
 		}
 
 		const maxRetries = 3;
@@ -151,23 +151,23 @@ class ChessGame {
 		}
 	}
 
-    getCurrentStatePrompt(fen, pgn, moves) {
-        return `User:
-    FEN notation:
-    \`\`\`
-    ${fen}
-    \`\`\`
+	getCurrentStatePrompt(fen, pgn, moves) {
+		return `
+		FEN notation:
+		\`\`\`
+		${fen}
+		\`\`\`
 
-    PGN notation:
-    \`\`\`
-    ${pgn}
-    \`\`\`
+		PGN notation:
+		\`\`\`
+		${pgn}
+		\`\`\`
 
-    Available moves:
-    \`\`\`
-    ${moves.join(', ')}
-    \`\`\``;
-    }
+		Available moves:
+		\`\`\`
+		${moves.join(', ')}
+		\`\`\``;
+	}
 
 	getCurrentStateObject(move, isUserMove) {
 		return {
