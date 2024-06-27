@@ -118,7 +118,7 @@ class ChessGame {
 	${historyItem.moves.join(', ')}
 	\`\`\`
 
-	${historyItem.move ? `Assistant:\n$${historyItem.move}` : ''}`;
+	${historyItem.move ? `Assistant:\n${historyItem.move}` : ''}`;
 		}).join('\n\n');
 
 		const currentState = `User:
