@@ -38,7 +38,7 @@ class ChessGame {
         this.game = new Chess();
         this.gameHistory = [];
         this.lastPlayerMove = null;
-        this.isFirstMove = true;  // Add this flag
+        this.isFirstMove = true;
     }
 
     getOpponentIcon() {
@@ -101,49 +101,20 @@ class ChessGame {
         const systemPrompt = "System:\n" + ChessGame.opponentMovePrompt
             .replace('{{color}}', this.getOpponentColor().toUpperCase());
 
-		const gameHistory = this.gameHistory.map((historyItem, index) => {
-			return `User:
-	FEN notation:
-	\`\`\`
-	${historyItem.fen}
-	\`\`\`
+        let prompt;
+        
+        if (this.isFirstMove) {
+            // For the first move, only include the current state
+            prompt = `${systemPrompt}\n\n${this.getCurrentStatePrompt(fen, pgn, moves)}`;
+            this.isFirstMove = false;
+        } else {
+            // For subsequent moves, include the game history and current state separately
+            const gameHistory = this.gameHistory.map(this.getHistoryItemPrompt).join('\n\n');
+            const currentState = this.getCurrentStatePrompt(fen, pgn, moves);
+            prompt = `${systemPrompt}\n\n${gameHistory}\n\n${currentState}`;
+        }
 
-	PGN notation:
-	\`\`\`
-	${historyItem.pgn}
-	\`\`\`
-
-	Available moves:
-	\`\`\`
-	${historyItem.moves.join(', ')}
-	\`\`\`
-
-	${historyItem.move ? `Assistant:\n${historyItem.move}` : ''}`;
-		}).join('\n\n');
-
-		const currentState = `User:
-	FEN notation:
-	\`\`\`
-	${fen}
-	\`\`\`
-
-	PGN notation:
-	\`\`\`
-	${pgn}
-	\`\`\`
-
-	Available moves:
-	\`\`\`
-	${moves.join(', ')}
-	\`\`\``;
-
-		const prompt = [
-			systemPrompt,
-			gameHistory,
-			currentState
-		].filter(Boolean).join('\n\n');  // Filter out empty strings
-
-		const maxRetries = 3;
+        const maxRetries = 3;
 
         for (let i = 0; i < maxRetries; i++) {
             try {
@@ -181,30 +152,77 @@ class ChessGame {
                 }
             }
         }
+    }
 
-		function parseMove(reply, moves) {
-			reply = String(reply).trim();
-			const regularMatch = reply.match(/([a-h][1-8]-[a-h][1-8])/g);
+    getCurrentStatePrompt(fen, pgn, moves) {
+        return `User:
+    FEN notation:
+    \`\`\`
+    ${fen}
+    \`\`\`
 
-			if (regularMatch) {
-				return regularMatch[0].split('-');
-			}
+    PGN notation:
+    \`\`\`
+    ${pgn}
+    \`\`\`
 
-			const notationMatch = reply.match(/([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(=[NBRQK])?(\+|#)?$|^O-O(-O)?/);
+    Available moves:
+    \`\`\`
+    ${moves.join(', ')}
+    \`\`\``;
+    }
 
-			if (notationMatch) {
-				return notationMatch[0];
-			}
+    getCurrentStateObject(move) {
+        return {
+            fen: this.game.fen(),
+            pgn: this.game.pgn(),
+            moves: this.game.moves(),
+            move: move
+        };
+    }
 
-			for (const move of moves) {
-				if (reply.toLowerCase().includes(move.toLowerCase())) {
-					return move;
-				}
-			}
+    getHistoryItemPrompt(historyItem) {
+        return `User:
+    FEN notation:
+    \`\`\`
+    ${historyItem.fen}
+    \`\`\`
 
-			return null;
-		}
-	}
+    PGN notation:
+    \`\`\`
+    ${historyItem.pgn}
+    \`\`\`
+
+    Available moves:
+    \`\`\`
+    ${historyItem.moves.join(', ')}
+    \`\`\`
+
+    ${historyItem.move ? `Assistant:\n${historyItem.move}` : ''}`;
+    }
+
+    parseMove(reply, moves) {
+        reply = String(reply).trim();
+        const regularMatch = reply.match(/([a-h][1-8]-[a-h][1-8])/g);
+
+        if (regularMatch) {
+            return regularMatch[0].split('-');
+        }
+
+        const notationMatch = reply.match(/([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(=[NBRQK])?(\+|#)?$|^O-O(-O)?/);
+
+        if (notationMatch) {
+            return notationMatch[0];
+        }
+
+        for (const move of moves) {
+            if (reply.toLowerCase().includes(move.toLowerCase())) {
+                return move;
+            }
+        }
+
+        return null;
+    }
 
     removeGraySquares() {
         document.querySelectorAll(`#${this.boardId} .square-55d63`).forEach((element) => {
@@ -231,39 +249,34 @@ class ChessGame {
         }
     }
 
-	onDrop(source, target) {
-		this.removeGraySquares();
+    onDrop(source, target) {
+        this.removeGraySquares();
 
-		try {
-			console.log("Player attempting move:", source, "to", target);
-			const move = this.game.move({
-				from: source,
-				to: target,
-				promotion: 'q'
-			});
+        try {
+            console.log("Player attempting move:", source, "to", target);
+            const move = this.game.move({
+                from: source,
+                to: target,
+                promotion: 'q'
+            });
 
-			if (move) {
-				console.log("Player move result:", move);
-				// Append the current state to the history after the player's move
-				this.gameHistory.push({
-					fen: this.game.fen(),
-					pgn: this.game.pgn(),
-					moves: this.game.moves(),
-					move: null  // This will be filled by the AI's response
-				});
-				// Update position on board
-				this.board.position(this.game.fen());
-				this.updateStatus();
-				this.tryMoveOpponent();
-			} else {
-				console.log("Invalid player move");
-				return 'snapback';
-			}
-		} catch (error) {
-			console.error('Error making move:', error);
-			return 'snapback';
-		}
-	}
+            if (move) {
+                console.log("Player move result:", move);
+                // Append the current state to the history after the player's move
+                this.gameHistory.push(this.getCurrentStateObject(move));
+                // Update position on board
+                this.board.position(this.game.fen());
+                this.updateStatus();
+                this.tryMoveOpponent();
+            } else {
+                console.log("Invalid player move");
+                return 'snapback';
+            }
+        } catch (error) {
+            console.error('Error making move:', error);
+            return 'snapback';
+        }
+    }
 
     onMouseoverSquare(square, piece) {
         if (this.game.isGameOver()) {
