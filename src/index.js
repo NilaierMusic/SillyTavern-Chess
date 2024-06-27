@@ -101,10 +101,8 @@ class ChessGame {
 		const systemPrompt = "System:\n" + ChessGame.opponentMovePrompt
 			.replace('{{color}}', this.getOpponentColor().toUpperCase());
 
-		let gameHistory = '';
-		if (this.gameHistory.length > 0) {
-			gameHistory = this.gameHistory.map((historyItem, index) => {
-				return `User:
+		const gameHistory = this.gameHistory.map((historyItem, index) => {
+			return `User:
 	FEN notation:
 	\`\`\`
 	${historyItem.fen}
@@ -120,9 +118,8 @@ class ChessGame {
 	${historyItem.moves.join(', ')}
 	\`\`\`
 
-	${historyItem.move ? `Assistant:\n${historyItem.move}` : ''}`;
-			}).join('\n\n');
-		}
+	${historyItem.move ? `Assistant:\n$${historyItem.move}` : ''}`;
+		}).join('\n\n');
 
 		const currentState = `User:
 	FEN notation:
@@ -140,22 +137,11 @@ class ChessGame {
 	${moves.join(', ')}
 	\`\`\``;
 
-		let prompt;
-		if (this.isFirstMove) {
-			// For the first move, only include the current state
-			prompt = [
-				systemPrompt,
-				currentState
-			].join('\n\n');
-			this.isFirstMove = false;  // Reset the flag after the first move
-		} else {
-			// For subsequent moves, include the game history
-			prompt = [
-				systemPrompt,
-				gameHistory,
-				currentState
-			].filter(Boolean).join('\n\n');  // Filter out empty strings
-		}
+		const prompt = [
+			systemPrompt,
+			gameHistory,
+			currentState
+		].filter(Boolean).join('\n\n');  // Filter out empty strings
 
 		const maxRetries = 3;
 
@@ -176,8 +162,13 @@ class ChessGame {
 				}
 				console.log("Move result:", result);
 
-				// Update the last entry in gameHistory with the assistant's move
-				this.gameHistory[this.gameHistory.length - 1].move = move;
+				// Append the current state to the history after the move
+				this.gameHistory.push({
+					fen: this.game.fen(),
+					pgn: this.game.pgn(),
+					moves: this.game.moves(),
+					move: move
+				});
 
 				this.board.position(this.game.fen());
 				this.updateStatus();
@@ -188,8 +179,13 @@ class ChessGame {
 					console.warn('Chess: Making a random move');
 					const randomMove = moves[Math.floor(Math.random() * moves.length)];
 					this.game.move(randomMove);
-					// Update the last entry in gameHistory with the random move
-					this.gameHistory[this.gameHistory.length - 1].move = randomMove;
+					// Append the current state to the history after the move
+					this.gameHistory.push({
+						fen: this.game.fen(),
+						pgn: this.game.pgn(),
+						moves: this.game.moves(),
+						move: randomMove
+					});
 					this.board.position(this.game.fen());
 					this.updateStatus();
 				}
@@ -258,6 +254,7 @@ class ChessGame {
 
 			if (move) {
 				console.log("Player move result:", move);
+				// Append the current state to the history after the player's move
 				this.gameHistory.push({
 					fen: this.game.fen(),
 					pgn: this.game.pgn(),
