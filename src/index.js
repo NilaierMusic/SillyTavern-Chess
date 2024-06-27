@@ -132,7 +132,7 @@ class ChessGame {
 				console.log("Move result:", result);
 
 				// Append the current state to the history after the move
-				this.gameHistory.push(this.getCurrentStateObject(move));
+				this.gameHistory.push(this.getCurrentStateObject(move, false));
 
 				this.board.position(this.game.fen());
 				this.updateStatus();
@@ -143,7 +143,7 @@ class ChessGame {
 					console.warn('Chess: Making a random move');
 					const randomMove = moves[Math.floor(Math.random() * moves.length)];
 					this.game.move(randomMove);
-					this.gameHistory.push(this.getCurrentStateObject(randomMove));
+					this.gameHistory.push(this.getCurrentStateObject(randomMove, false));
 					this.board.position(this.game.fen());
 					this.updateStatus();
 				}
@@ -169,34 +169,36 @@ class ChessGame {
     \`\`\``;
     }
 
-	getCurrentStateObject(move) {
+	getCurrentStateObject(move, isUserMove) {
 		return {
 			fen: this.game.fen(),
 			pgn: this.game.pgn(),
 			moves: this.game.moves(),
-			move: move
+			move: move,
+			isUserMove: isUserMove
 		};
 	}
 
-    getHistoryItemPrompt(historyItem) {
-        return `User:
-    FEN notation:
-    \`\`\`
-    ${historyItem.fen}
-    \`\`\`
+	getHistoryItemPrompt(historyItem) {
+		let moveAttribution = historyItem.isUserMove ? 'User' : 'Assistant';
+		return `${moveAttribution}:
+		FEN notation:
+		\`\`\`
+		${historyItem.fen}
+		\`\`\`
 
-    PGN notation:
-    \`\`\`
-    ${historyItem.pgn}
-    \`\`\`
+		PGN notation:
+		\`\`\`
+		${historyItem.pgn}
+		\`\`\`
 
-    Available moves:
-    \`\`\`
-    ${historyItem.moves.join(', ')}
-    \`\`\`
+		Available moves:
+		\`\`\`
+		${historyItem.moves.join(', ')}
+		\`\`\`
 
-    ${historyItem.move ? `Assistant:\n${historyItem.move}` : ''}`;
-    }
+		${moveAttribution === 'Assistant' ? `Assistant:\n${historyItem.move}` : ''}`;
+	}
 
 	parseMove(reply, moves) {
 		reply = String(reply).trim();
@@ -262,7 +264,7 @@ class ChessGame {
 			if (move) {
 				console.log("Player move result:", move);
 				// Append the current state to the history after the player's move
-				this.gameHistory.push(this.getCurrentStateObject(move.san));
+				this.gameHistory.push(this.getCurrentStateObject(move.san, true));
 				// Update position on board
 				this.board.position(this.game.fen());
 				this.updateStatus();
