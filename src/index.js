@@ -36,9 +36,10 @@ class ChessGame {
         this.boardId = `chessboard-${this.gameId}`;
         this.color = color;
         this.game = new Chess();
-		this.gameHistory = [];
-		this.lastPlayerMove = null;
-	}
+        this.gameHistory = [];
+        this.lastPlayerMove = null;
+        this.isFirstMove = true;  // Add this flag
+    }
 
     getOpponentIcon() {
         return 'fa-chess-queen';
@@ -139,11 +140,22 @@ class ChessGame {
 	${moves.join(', ')}
 	\`\`\``;
 
-		const prompt = [
-			systemPrompt,
-			gameHistory,
-			currentState
-		].filter(Boolean).join('\n\n');  // Filter out empty strings
+		let prompt;
+		if (this.isFirstMove) {
+			// For the first move, only include the current state
+			prompt = [
+				systemPrompt,
+				currentState
+			].join('\n\n');
+			this.isFirstMove = false;  // Reset the flag after the first move
+		} else {
+			// For subsequent moves, include the game history
+			prompt = [
+				systemPrompt,
+				gameHistory,
+				currentState
+			].filter(Boolean).join('\n\n');  // Filter out empty strings
+		}
 
 		const maxRetries = 3;
 
