@@ -89,17 +89,17 @@ class ChessGame {
         }
     }
 
-	async tryMoveOpponent() {
-		if (!this.isOpponentTurn() || this.game.isGameOver()) {
-			return;
-		}
+    async tryMoveOpponent() {
+        if (!this.isOpponentTurn() || this.game.isGameOver()) {
+            return;
+        }
 
-		const fen = this.game.fen();
-		const moves = this.game.moves();
-		const pgn = this.game.pgn();
-		
-		const systemPrompt = "System:\n" + ChessGame.opponentMovePrompt
-			.replace('{{color}}', this.getOpponentColor().toUpperCase());
+        const fen = this.game.fen();
+        const moves = this.game.moves();
+        const pgn = this.game.pgn();
+        
+        const systemPrompt = "System:\n" + ChessGame.opponentMovePrompt
+            .replace('{{color}}', this.getOpponentColor().toUpperCase());
 
 		const gameHistory = this.gameHistory.map((historyItem, index) => {
 			return `User:
@@ -145,52 +145,42 @@ class ChessGame {
 
 		const maxRetries = 3;
 
-		for (let i = 0; i < maxRetries; i++) {
-			try {
-				const reply = await generateRaw(prompt, '', false, false, '');
-				console.log("AI's full response:", reply);
-				const move = parseMove(reply, moves);
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                const reply = await generateRaw(prompt, '', false, false, '');
+                console.log("AI's full response:", reply);
+                const move = this.parseMove(reply, moves);
 
-				if (!move) {
-					throw new Error('Failed to parse move');
-				}
+                if (!move) {
+                    throw new Error('Failed to parse move');
+                }
 
-				console.log("Attempting to make move:", move);
-				const result = this.game.move(move);
-				if (!result) {
-					throw new Error('Invalid move');
-				}
-				console.log("Move result:", result);
+                console.log("Attempting to make move:", move);
+                const result = this.game.move(move);
+                if (!result) {
+                    throw new Error('Invalid move');
+                }
+                console.log("Move result:", result);
 
-				// Append the current state to the history after the move
-				this.gameHistory.push({
-					fen: this.game.fen(),
-					pgn: this.game.pgn(),
-					moves: this.game.moves(),
-					move: move
-				});
+                // Append the current state to the history after the move and after sending the prompt
+                this.gameHistory.push(this.getCurrentStateObject(move));
 
-				this.board.position(this.game.fen());
-				this.updateStatus();
-				return;
-			} catch (error) {
-				console.error('Failed to generate a move', error);
-				if (i === maxRetries - 1) {
-					console.warn('Chess: Making a random move');
-					const randomMove = moves[Math.floor(Math.random() * moves.length)];
-					this.game.move(randomMove);
-					// Append the current state to the history after the move
-					this.gameHistory.push({
-						fen: this.game.fen(),
-						pgn: this.game.pgn(),
-						moves: this.game.moves(),
-						move: randomMove
-					});
-					this.board.position(this.game.fen());
-					this.updateStatus();
-				}
-			}
-		}
+                this.board.position(this.game.fen());
+                this.updateStatus();
+                return;
+            } catch (error) {
+                console.error('Failed to generate a move', error);
+                if (i === maxRetries - 1) {
+                    console.warn('Chess: Making a random move');
+                    const randomMove = moves[Math.floor(Math.random() * moves.length)];
+                    this.game.move(randomMove);
+                    // Append the current state to the history after the move and after sending the prompt
+                    this.gameHistory.push(this.getCurrentStateObject(randomMove));
+                    this.board.position(this.game.fen());
+                    this.updateStatus();
+                }
+            }
+        }
 
 		function parseMove(reply, moves) {
 			reply = String(reply).trim();
