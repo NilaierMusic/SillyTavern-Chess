@@ -100,8 +100,10 @@ class ChessGame {
 		const systemPrompt = "System:\n" + ChessGame.opponentMovePrompt
 			.replace('{{color}}', this.getOpponentColor().toUpperCase());
 
-		const gameHistory = this.gameHistory.map((historyItem, index) => {
-			return `User:
+		let gameHistory = '';
+		if (this.gameHistory.length > 0) {
+			gameHistory = this.gameHistory.map((historyItem, index) => {
+				return `User:
 	FEN notation:
 	\`\`\`
 	${historyItem.fen}
@@ -117,8 +119,9 @@ class ChessGame {
 	${historyItem.moves.join(', ')}
 	\`\`\`
 
-	${historyItem.move ? `Assistant:\n$${historyItem.move}` : ''}`;
-		}).join('\n\n');
+	${historyItem.move ? `Assistant:\n${historyItem.move}` : ''}`;
+			}).join('\n\n');
+		}
 
 		const currentState = `User:
 	FEN notation:
@@ -136,16 +139,16 @@ class ChessGame {
 	${moves.join(', ')}
 	\`\`\``;
 
+		const prompt = [
+			systemPrompt,
+			gameHistory,
+			currentState
+		].filter(Boolean).join('\n\n');  // Filter out empty strings
+
 		const maxRetries = 3;
 
 		for (let i = 0; i < maxRetries; i++) {
 			try {
-				const prompt = [
-					systemPrompt,
-					gameHistory,
-					currentState
-				].join('\n\n');
-				
 				const reply = await generateRaw(prompt, '', false, false, '');
 				console.log("AI's full response:", reply);
 				const move = parseMove(reply, moves);
