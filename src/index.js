@@ -89,70 +89,67 @@ class ChessGame {
         }
     }
 
-    async tryMoveOpponent() {
-        if (!this.isOpponentTurn() || this.game.isGameOver()) {
-            return;
-        }
+	async tryMoveOpponent() {
+		if (!this.isOpponentTurn() || this.game.isGameOver()) {
+			return;
+		}
 
-        const fen = this.game.fen();
-        const moves = this.game.moves();
-        const pgn = this.game.pgn();
-        
-        const systemPrompt = "System:\n" + ChessGame.opponentMovePrompt
-            .replace('{{color}}', this.getOpponentColor().toUpperCase());
+		const fen = this.game.fen();
+		const moves = this.game.moves();
+		const pgn = this.game.pgn();
+		
+		const systemPrompt = "System:\n" + ChessGame.opponentMovePrompt
+			.replace('{{color}}', this.getOpponentColor().toUpperCase());
 
-        let prompt;
-        
-        if (this.isFirstMove) {
-            // For the first move, only include the current state
-            prompt = `${systemPrompt}\n\n${this.getCurrentStatePrompt(fen, pgn, moves)}`;
-            this.isFirstMove = false;
-        } else {
-            // For subsequent moves, include the game history and current state separately
-            const gameHistory = this.gameHistory.map(this.getHistoryItemPrompt).join('\n\n');
-            const currentState = this.getCurrentStatePrompt(fen, pgn, moves);
-            prompt = `${systemPrompt}\n\n${gameHistory}\n\n${currentState}`;
-        }
+		let prompt;
+		
+		if (this.isFirstMove) {
+			prompt = `${systemPrompt}\n\n${this.getCurrentStatePrompt(fen, pgn, moves)}`;
+			this.isFirstMove = false;
+		} else {
+			const gameHistory = this.gameHistory.map(this.getHistoryItemPrompt).join('\n\n');
+			const currentState = this.getCurrentStatePrompt(fen, pgn, moves);
+			prompt = `${systemPrompt}\n\n${gameHistory}\n\n${currentState}`;
+		}
 
-        const maxRetries = 3;
+		const maxRetries = 3;
 
-        for (let i = 0; i < maxRetries; i++) {
-            try {
-                const reply = await generateRaw(prompt, '', false, false, '');
-                console.log("AI's full response:", reply);
-                const move = this.parseMove(reply, moves);
+		for (let i = 0; i < maxRetries; i++) {
+			try {
+				const reply = await generateRaw(prompt, '', false, false, '');
+				console.log("AI's full response:", reply);
+				const move = this.parseMove(reply, moves);
 
-                if (!move) {
-                    throw new Error('Failed to parse move');
-                }
+				if (!move) {
+					throw new Error('Failed to parse move');
+				}
 
-                console.log("Attempting to make move:", move);
-                const result = this.game.move(move);
-                if (!result) {
-                    throw new Error('Invalid move');
-                }
-                console.log("Move result:", result);
+				console.log("Attempting to make move:", move);
+				const result = this.game.move(move);
+				if (!result) {
+					throw new Error('Invalid move');
+				}
+				console.log("Move result:", result);
 
-                // Append the current state to the history after the move and after sending the prompt
-                this.gameHistory.push(this.getCurrentStateObject(move));
+				// Append the current state to the history after the move
+				this.gameHistory.push(this.getCurrentStateObject(move));
 
-                this.board.position(this.game.fen());
-                this.updateStatus();
-                return;
-            } catch (error) {
-                console.error('Failed to generate a move', error);
-                if (i === maxRetries - 1) {
-                    console.warn('Chess: Making a random move');
-                    const randomMove = moves[Math.floor(Math.random() * moves.length)];
-                    this.game.move(randomMove);
-                    // Append the current state to the history after the move and after sending the prompt
-                    this.gameHistory.push(this.getCurrentStateObject(randomMove));
-                    this.board.position(this.game.fen());
-                    this.updateStatus();
-                }
-            }
-        }
-    }
+				this.board.position(this.game.fen());
+				this.updateStatus();
+				return;
+			} catch (error) {
+				console.error('Failed to generate a move', error);
+				if (i === maxRetries - 1) {
+					console.warn('Chess: Making a random move');
+					const randomMove = moves[Math.floor(Math.random() * moves.length)];
+					this.game.move(randomMove);
+					this.gameHistory.push(this.getCurrentStateObject(randomMove));
+					this.board.position(this.game.fen());
+					this.updateStatus();
+				}
+			}
+		}
+	}
 
     getCurrentStatePrompt(fen, pgn, moves) {
         return `User:
@@ -172,14 +169,14 @@ class ChessGame {
     \`\`\``;
     }
 
-    getCurrentStateObject(move) {
-        return {
-            fen: this.game.fen(),
-            pgn: this.game.pgn(),
-            moves: this.game.moves(),
-            move: move
-        };
-    }
+	getCurrentStateObject(move) {
+		return {
+			fen: this.game.fen(),
+			pgn: this.game.pgn(),
+			moves: this.game.moves(),
+			move: move
+		};
+	}
 
     getHistoryItemPrompt(historyItem) {
         return `User:
@@ -201,28 +198,30 @@ class ChessGame {
     ${historyItem.move ? `Assistant:\n${historyItem.move}` : ''}`;
     }
 
-    parseMove(reply, moves) {
-        reply = String(reply).trim();
-        const regularMatch = reply.match(/([a-h][1-8]-[a-h][1-8])/g);
+	parseMove(reply, moves) {
+		reply = String(reply).trim();
+		
+		// Check for regular move notation (e.g., "e2-e4")
+		const regularMatch = reply.match(/([a-h][1-8]-[a-h][1-8])/);
+		if (regularMatch) {
+			return regularMatch[0].replace('-', '');
+		}
 
-        if (regularMatch) {
-            return regularMatch[0].split('-');
-        }
+		// Check for algebraic notation (e.g., "Nf3")
+		const notationMatch = reply.match(/([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(=[NBRQK])?(\+|#)?$|^O-O(-O)?/);
+		if (notationMatch) {
+			return notationMatch[0];
+		}
 
-        const notationMatch = reply.match(/([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(=[NBRQK])?(\+|#)?$|^O-O(-O)?/);
+		// If no exact match, try to find a move that includes the reply
+		for (const move of moves) {
+			if (reply.toLowerCase().includes(move.toLowerCase())) {
+				return move;
+			}
+		}
 
-        if (notationMatch) {
-            return notationMatch[0];
-        }
-
-        for (const move of moves) {
-            if (reply.toLowerCase().includes(move.toLowerCase())) {
-                return move;
-            }
-        }
-
-        return null;
-    }
+		return null;
+	}
 
     removeGraySquares() {
         document.querySelectorAll(`#${this.boardId} .square-55d63`).forEach((element) => {
@@ -249,34 +248,34 @@ class ChessGame {
         }
     }
 
-    onDrop(source, target) {
-        this.removeGraySquares();
+	onDrop(source, target) {
+		this.removeGraySquares();
 
-        try {
-            console.log("Player attempting move:", source, "to", target);
-            const move = this.game.move({
-                from: source,
-                to: target,
-                promotion: 'q'
-            });
+		try {
+			console.log("Player attempting move:", source, "to", target);
+			const move = this.game.move({
+				from: source,
+				to: target,
+				promotion: 'q'
+			});
 
-            if (move) {
-                console.log("Player move result:", move);
-                // Append the current state to the history after the player's move
-                this.gameHistory.push(this.getCurrentStateObject(move));
-                // Update position on board
-                this.board.position(this.game.fen());
-                this.updateStatus();
-                this.tryMoveOpponent();
-            } else {
-                console.log("Invalid player move");
-                return 'snapback';
-            }
-        } catch (error) {
-            console.error('Error making move:', error);
-            return 'snapback';
-        }
-    }
+			if (move) {
+				console.log("Player move result:", move);
+				// Append the current state to the history after the player's move
+				this.gameHistory.push(this.getCurrentStateObject(move.san));
+				// Update position on board
+				this.board.position(this.game.fen());
+				this.updateStatus();
+				this.tryMoveOpponent();
+			} else {
+				console.log("Invalid player move");
+				return 'snapback';
+			}
+		} catch (error) {
+			console.error('Error making move:', error);
+			return 'snapback';
+		}
+	}
 
     onMouseoverSquare(square, piece) {
         if (this.game.isGameOver()) {
