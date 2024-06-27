@@ -107,7 +107,7 @@ class ChessGame {
 			prompt = `${systemPrompt}\n\n${this.getCurrentStatePrompt(fen, pgn, moves)}`;
 			this.isFirstMove = false;
 		} else {
-			const gameHistory = this.gameHistory.map(this.getHistoryItemPrompt).join('\n\n');
+			const gameHistory = this.gameHistory.slice(0, -1).map(this.getHistoryItemPrompt).join('\n\n');
 			const currentState = this.getCurrentStatePrompt(fen, pgn, moves);
 			prompt = `${systemPrompt}\n\n${gameHistory}\n\nUser:${currentState}`;
 		}
@@ -180,8 +180,8 @@ class ChessGame {
 	}
 
 	getHistoryItemPrompt(historyItem) {
-		let moveAttribution = historyItem.isUserMove ? 'User' : 'Assistant';
-		return `${moveAttribution}:
+		if (historyItem.isUserMove) {
+			return `User:
 		FEN notation:
 		\`\`\`
 		${historyItem.fen}
@@ -195,9 +195,11 @@ class ChessGame {
 		Available moves:
 		\`\`\`
 		${historyItem.moves.join(', ')}
-		\`\`\`
-
-		${moveAttribution === 'Assistant' ? `Assistant:\n${historyItem.move}` : ''}`;
+		\`\`\``;
+		} else {
+			return `Assistant:
+	${historyItem.move}`;
+		}
 	}
 
 	parseMove(reply, moves) {
